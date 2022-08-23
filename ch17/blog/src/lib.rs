@@ -12,16 +12,7 @@ impl Post {
     }
 
     pub fn add_text(&mut self, text: &str) {
-        self.content.push_str(text);
-    }
-
-    pub fn clear_text(&mut self) {
-        self.content.clear();
-    }
-
-    pub fn replace_text(&mut self, text: &str) {
-        self.clear_text();
-        self.add_text(text);
+        self.content.push_str(self.state.as_ref().unwrap().add_text(text));
     }
 
     pub fn content(&self) -> &str {
@@ -48,20 +39,27 @@ impl Post {
 }
 
 trait State {
-    fn request_review(self: Box<Self>) -> Box<dyn State>;
-    fn approve(self: Box<Self>) -> Box<dyn State>;
+    fn add_text<'a>(&self, text: &'a str) -> &'a str {
+        ""
+    }
     fn content<'a>(&self, post: &'a Post) -> &'a str {
         ""
     }
+    fn request_review(self: Box<Self>) -> Box<dyn State>;
+    fn approve(self: Box<Self>) -> Box<dyn State>;
     fn reject(self: Box<Self>) -> Box<dyn State>;
 }
 
 struct Draft {}
 
 impl State for Draft {
+    fn add_text<'a>(&self, text: &'a str) -> &'a str {
+        text
+    }
+
     fn request_review(self: Box<Self>) -> Box<dyn State> {
         Box::new(PendingReview {
-            review_count: 0
+            approvals: 0
         })
     }
 
@@ -75,7 +73,7 @@ impl State for Draft {
 }
 
 struct PendingReview {
-    review_count: u32,
+    approvals: u32,
 }
 
 impl State for PendingReview {
@@ -84,11 +82,11 @@ impl State for PendingReview {
     }
 
     fn approve(self: Box<Self>) -> Box<dyn State> {
-        if self.review_count >= 1 {
+        if self.approvals >= 1 {
             return Box::new(Published {});
         }
         Box::new(PendingReview {
-            review_count: self.review_count + 1
+            approvals: self.approvals+ 1
         })
     }
 
@@ -168,7 +166,7 @@ mod tests {
     fn post_review_reject_double_approve_works() {
         let mut post = Post::new();
 
-        post.add_text("I ated a salad for lunch today");
+        post.add_text("I ate a salad for lunch ");
         assert_eq!("", post.content());
 
         post.request_review();
@@ -177,7 +175,7 @@ mod tests {
         post.reject();
         assert_eq!("", post.content());
 
-        post.replace_text("I ate a salad for lunch today");
+        post.add_text("today");
         assert_eq!("", post.content());
 
         post.request_review();
@@ -187,5 +185,23 @@ mod tests {
         post.approve();
         assert_eq!("I ate a salad for lunch today", post.content());
     }
-}
 
+    #[test]
+    fn cannot_add_text_in_review_or_published() {
+        let mut post = Post::new();
+
+        post.add_text("I ate a salad for lunch today");
+        assert_eq!("", post.content());
+
+        post.request_review();
+        assert_eq!("", post.content());
+
+        post.add_text("I ate a salad for lunch today");
+        assert_eq!("", post.content());
+
+        post.approve();
+        post.approve();
+        post.add_text("I ate a salad for lunch today");
+        assert_eq!("I ate a salad for lunch today", post.content());
+    }
+}
