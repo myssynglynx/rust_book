@@ -84,7 +84,7 @@ impl State for PendingReview {
     }
 
     fn approve(self: Box<Self>) -> Box<dyn State> {
-        if self.review_count >= 1 {
+        if self.review_count > 1 {
             return Box::new(Published {});
         }
         Box::new(PendingReview {
